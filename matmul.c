@@ -11,7 +11,7 @@
 #include "amx.h"
 #include "util.h"
 
-#define BS 10
+#define BS 1
 #define M 1024
 #define N 1024
 #define K 2048
@@ -21,8 +21,9 @@
 // L1(eff core): 128+64KB per core
 
 // 128 x 128 block sizes: 128 * 128 * 2 * 3 = 96KB
-#define BLOCKSIZE_X 128
-#define BLOCKSIZE_Y 128
+#define BLOCKSIZE_M 128
+#define BLOCKSIZE_N 128
+#define BLOCKSIZE_K 128
 
 // assume A is transposed to access columns as rows
 _Float16 At[BS*K*M] __attribute__ ((aligned (64)));
@@ -32,14 +33,14 @@ _Float16  C[BS*M*N] __attribute__ ((aligned (64)));
 void matmul() {
   for (int b = 0; b < BS; b++) {
 
-    for (int bi = 0; bi < M; bi+=BLOCKSIZE_X) {
-      for (int bj = 0; bj < N; bj+=BLOCKSIZE_Y) {
+    for (int bi = 0; bi < M; bi+=BLOCKSIZE_M) {      // cache tiling
+      for (int bj = 0; bj < N; bj+=BLOCKSIZE_N) {
 
-        for (int i = 0; i < BLOCKSIZE_X; i+=32) {     // Z tile row
-          for (int j = 0; j < BLOCKSIZE_Y; j+=64) {   // Z tile col. process two at once on seperate z-accumulators
+        for (int i = 0; i < BLOCKSIZE_M; i+=32) {    // Z regtile row
+          for (int j = 0; j < BLOCKSIZE_N; j+=64) {  // Z regtile col. process two at once on seperate z-accumulators
             AMX_SET(); // z-register reset to zero
 
-            for (int k = 0; k < K; k+=32) { // down cols of At and B
+            for (int k = 0; k < K; k+=32) {          // down cols of At and B
 
               // the X,Y registers can only hold 8 partial rows of 32 f16s
               for (int rb = 0; rb < 32; rb+=8) {
@@ -65,7 +66,6 @@ void matmul() {
             AMX_CLR();
           }
         }
-
       }
     }
   }
